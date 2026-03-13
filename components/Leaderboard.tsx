@@ -15,6 +15,28 @@ interface Trader {
   follower_count: number;
   copy_trade_count: number;
   roi_7d?: number;
+  pnl_30d?: number;
+  pnl_7d?: number;
+  pnl_1d?: number;
+  equity?: number;
+  composite_score?: number;
+}
+
+// QA팀 추천 TOP5 (백테스트 ROI + 복합 스코어 기준)
+const TOP5_RECOMMENDED = new Set([
+  '5C9GKLrKFUvLWZEbMZQC5mtkTdKxuUhCzVCXZQH4FmCw',  // ROI+24% MaxDD0.1%
+  'EYhhf8u9M6kN9tCRVgd2Jki9fJm3XzJRnTF9k5eBC1q1',  // ROI+10% PF1000
+  'EcX5xSDT45Nvhi2gMTjTnhF3KT2w4sPF54esEZS3hwZu',  // PnL$518k Win52%
+  '4UBH19qUbXEaqyz9fKrFHuvj8BPMoM87H71s1YPKyGYq',   // Win100%
+  'A6VY4ZBUohgSLkwMuDwDvAnzgiXFB1eTDzaixyitPJep',   // Win92%
+]);
+
+function RecommendedBadge({ alias }: { alias: string }) {
+  if (alias?.startsWith('TOP1')) return <span className="ml-2 px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 text-xs rounded-full">🏆 #1</span>;
+  if (alias?.startsWith('TOP2')) return <span className="ml-2 px-1.5 py-0.5 bg-purple-500/20 text-purple-400 text-xs rounded-full">⭐ TOP2</span>;
+  if (alias?.startsWith('TIER1')) return <span className="ml-2 px-1.5 py-0.5 bg-green-500/20 text-green-400 text-xs rounded-full">✅ TIER1</span>;
+  if (alias?.startsWith('TIER2')) return <span className="ml-2 px-1.5 py-0.5 bg-blue-500/20 text-blue-400 text-xs rounded-full">🔵 TIER2</span>;
+  return null;
 }
 
 interface FollowModalProps {
@@ -130,7 +152,7 @@ export function Leaderboard() {
   const followerAddress: string = solanaWallet?.address || '';
 
   useEffect(() => {
-    fetch(`${API_URL}/traders?mock=true`)
+    fetch(`${API_URL}/traders?limit=20`)
       .then(r => r.json())
       .then(d => setTraders(d.data || []))
       .catch(() => {})
@@ -151,37 +173,49 @@ export function Leaderboard() {
             <tr className="text-gray-500 border-b border-gray-800">
               <th className="text-left py-3 px-4">#</th>
               <th className="text-left py-3 px-4">Trader</th>
-              <th className="text-right py-3 px-4">PnL</th>
-              <th className="text-right py-3 px-4">Win Rate</th>
-              <th className="text-right py-3 px-4">Max DD</th>
+              <th className="text-right py-3 px-4">30d ROI</th>
+              <th className="text-right py-3 px-4">7d PnL</th>
+              <th className="text-right py-3 px-4">Score</th>
               <th className="text-right py-3 px-4">Followers</th>
               <th className="text-right py-3 px-4"></th>
             </tr>
           </thead>
           <tbody>
-            {traders.map((t, i) => (
-              <tr key={t.address} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
+            {traders.map((t, i) => {
+              const eq = t.equity || 1;
+              const roi30 = t.pnl_30d != null ? (t.pnl_30d / eq * 100) : null;
+              const pnl7  = t.pnl_7d;
+              const score = t.composite_score ?? t.win_rate;
+              const isTop5 = TOP5_RECOMMENDED.has(t.address);
+              return (
+              <tr key={t.address} className={`border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors ${isTop5 ? 'bg-indigo-950/20' : ''}`}>
                 <td className="py-4 px-4 text-gray-500">{i + 1}</td>
                 <td className="py-4 px-4">
-                  <div className="font-medium">{t.alias}</div>
-                  <div className="text-xs text-gray-500 font-mono">{t.address.slice(0, 8)}...</div>
+                  <div className="flex items-center flex-wrap gap-1">
+                    <span className="font-medium">{t.address.slice(0, 8)}...</span>
+                    <RecommendedBadge alias={t.alias} />
+                  </div>
+                  <div className="text-xs text-gray-500 font-mono">{t.alias}</div>
                 </td>
-                <td className={`py-4 px-4 text-right font-mono font-medium ${t.total_pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {t.total_pnl >= 0 ? '+' : ''}{t.total_pnl.toLocaleString()} USDC
+                <td className={`py-4 px-4 text-right font-mono font-medium ${(roi30 ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {roi30 != null ? `${roi30 >= 0 ? '+' : ''}${roi30.toFixed(1)}%` : '—'}
                 </td>
-                <td className="py-4 px-4 text-right text-gray-300">{t.win_rate?.toFixed(1)}%</td>
-                <td className="py-4 px-4 text-right text-red-400">{t.max_drawdown?.toFixed(1)}%</td>
-                <td className="py-4 px-4 text-right text-gray-300">{t.follower_count}</td>
+                <td className={`py-4 px-4 text-right font-mono text-sm ${(pnl7 ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {pnl7 != null ? `${pnl7 >= 0 ? '+' : ''}$${Math.abs(pnl7).toLocaleString(undefined, {maximumFractionDigits: 0})}` : '—'}
+                </td>
+                <td className="py-4 px-4 text-right text-gray-300 text-xs">{score != null ? score.toFixed(1) : '—'}</td>
+                <td className="py-4 px-4 text-right text-gray-300">{t.follower_count ?? 0}</td>
                 <td className="py-4 px-4 text-right">
                   <button
                     onClick={() => authenticated ? setSelected(t) : alert('Connect wallet first')}
-                    className="bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${isTop5 ? 'bg-indigo-500 hover:bg-indigo-600' : 'bg-indigo-600/70 hover:bg-indigo-700'}`}
                   >
                     Copy
                   </button>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
