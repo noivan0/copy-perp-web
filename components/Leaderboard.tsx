@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { usePrivy } from '@privy-io/react-auth';
+import { BuilderCodeApproval } from './BuilderCodeApproval';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
 
@@ -27,6 +28,7 @@ function FollowModal({ trader, onClose, followerAddress }: FollowModalProps) {
   const [maxUsd, setMaxUsd] = useState(100);
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
+  const [builderApproved, setBuilderApproved] = useState(false);
 
   async function handleFollow() {
     setLoading(true);
@@ -67,6 +69,9 @@ function FollowModal({ trader, onClose, followerAddress }: FollowModalProps) {
         ) : (
           <>
             <div className="space-y-4">
+              {/* Builder Code 승인 */}
+              <BuilderCodeApproval onApproved={() => setBuilderApproved(true)} />
+
               <div>
                 <label className="text-sm text-gray-400 mb-1 block">Copy Ratio</label>
                 <input
@@ -92,20 +97,17 @@ function FollowModal({ trader, onClose, followerAddress }: FollowModalProps) {
                 />
               </div>
 
-              <div className="bg-gray-800 rounded-lg p-3 text-sm text-gray-400">
-                <p>Builder Code: <span className="text-indigo-400 font-mono">noivan</span></p>
-                <p className="mt-1">Fee: 0.05% of each copied trade</p>
-              </div>
             </div>
 
             <div className="flex gap-3 mt-6">
               <button onClick={onClose} className="flex-1 bg-gray-700 hover:bg-gray-600 py-2 rounded-lg text-sm">Cancel</button>
               <button
                 onClick={handleFollow}
-                disabled={loading}
+                disabled={loading || !builderApproved}
                 className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 py-2 rounded-lg text-sm font-medium"
+                title={!builderApproved ? 'Builder Code 승인 후 가능합니다' : ''}
               >
-                {loading ? 'Following...' : 'Start Copying'}
+                {loading ? 'Following...' : builderApproved ? 'Start Copying' : 'Approve First'}
               </button>
             </div>
           </>
